@@ -1,78 +1,59 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Bet260</title>
-  <style>
-    body {
-      font-family: Arial;
-      background: #0b0f14;
-      color: #e6e6e6;
-      margin: 0;
-      text-align: center;
-    }
+<title>Bet260</title>
 
-    h1 {
-      color: #00ff88;
-      margin-top: 15px;
-    }
+<style>
+body {
+  font-family: Arial;
+  background: #0b0f14;
+  color: #e6e6e6;
+  margin: 0;
+  text-align: center;
+}
 
-    .nav {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      margin: 10px;
-    }
+h1 { color: #00ff88; }
 
-    .nav button {
-      background: #1a222d;
-      color: white;
-      border: none;
-      padding: 10px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
+.nav button {
+  background:#1a222d;
+  color:white;
+  border:none;
+  padding:10px;
+  margin:5px;
+  border-radius:8px;
+}
 
-    .nav button:hover {
-      background: #2a3442;
-    }
+.box {
+  background:#151c24;
+  margin:10px auto;
+  padding:15px;
+  width:90%;
+  max-width:600px;
+  border-radius:12px;
+}
 
-    .box {
-      background: #151c24;
-      margin: 10px auto;
-      padding: 15px;
-      width: 90%;
-      max-width: 600px;
-      border-radius: 12px;
-    }
+button.bet {
+  background:#00ff88;
+  border:none;
+  padding:8px;
+  margin:5px;
+  border-radius:8px;
+  cursor:pointer;
+}
 
-    button.bet {
-      background: #00ff88;
-      border: none;
-      padding: 8px;
-      margin: 5px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: bold;
-    }
+button.bet:disabled {
+  background:#555;
+}
 
-    button.bet:disabled {
-      background: #555;
-      cursor: not-allowed;
-    }
-
-    .small {
-      color: #aaa;
-      font-size: 13px;
-    }
-
-    .hidden { display: none; }
-  </style>
+.small { color:#aaa; font-size:13px; }
+.hidden { display:none; }
+</style>
 </head>
 
 <body>
 
 <h1>Bet260 ⚽</h1>
-<h2 id="balance">Balance: $1000</h2>
+<h2 id="balance"></h2>
 
 <div class="nav">
   <button onclick="showTab('games')">Games</button>
@@ -80,39 +61,45 @@
   <button onclick="showTab('history')">History</button>
 </div>
 
-<!-- GAMES -->
-<div id="games">
+<div id="games"></div>
 
-  <div class="box">
-    <h3>World Cup Games</h3>
-
-    <p>Argentina vs Algeria <span id="status1">(UPCOMING)</span></p>
-
-    <button class="bet" id="a1" onclick="placeBet('Argentina', 1)">Bet Argentina $100</button>
-    <button class="bet" id="a2" onclick="placeBet('Algeria', 1)">Bet Algeria $100</button>
-  </div>
-
-</div>
-
-<!-- MY BETS -->
 <div id="bets" class="hidden">
   <div class="box">
     <h3>My Bets</h3>
-    <div id="activeBets">No active bets</div>
+    <div id="activeBets"></div>
   </div>
 </div>
 
-<!-- HISTORY -->
 <div id="history" class="hidden">
   <div class="box">
     <h3>History</h3>
-    <div id="historyList">No results yet</div>
+    <div id="historyList"></div>
   </div>
 </div>
 
+<audio id="clickSound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3"></audio>
+
 <script>
-let balance = 1000;
-let bets = [];
+
+// LOAD saved data (THIS FIXES RESET PROBLEM)
+let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
+let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
+
+// WORLD CUP STYLE SCHEDULE
+let games = [
+  {id:1, home:"Argentina", away:"Algeria", status:"UPCOMING", start: Date.now()+15000},
+  {id:2, home:"Brazil", away:"France", status:"UPCOMING", start: Date.now()+30000},
+  {id:3, home:"USA", away:"Mexico", status:"UPCOMING", start: Date.now()+45000}
+];
+
+function save() {
+  localStorage.setItem("balance", JSON.stringify(balance));
+  localStorage.setItem("bets", JSON.stringify(bets));
+}
+
+function sound() {
+  document.getElementById("clickSound").play();
+}
 
 function updateBalance() {
   document.getElementById("balance").innerText = "Balance: $" + balance;
@@ -126,80 +113,115 @@ function showTab(tab) {
   document.getElementById(tab).classList.remove("hidden");
 }
 
-function placeBet(team, gameId) {
-  if (balance < 100) {
-    alert("Not enough money!");
-    return;
-  }
+// RENDER GAMES
+function renderGames() {
+  let html = "";
 
-  balance -= 100;
-  updateBalance();
+  games.forEach(g => {
 
-  bets.push({
-    team: team,
-    amount: 100,
-    status: "ACTIVE"
+    let now = Date.now();
+
+    if (now > g.start) g.status = "LIVE";
+    if (now > g.start + 15000) g.status = "FINISHED";
+
+    let disabled = (g.status !== "UPCOMING") ? "disabled" : "";
+
+    html += `
+    <div class="box">
+      <h3>${g.home} vs ${g.away}</h3>
+      <p>Status: ${g.status}</p>
+
+      <button class="bet" ${disabled} onclick="bet('${g.home}', ${g.id})">
+        Bet ${g.home} $100
+      </button>
+
+      <button class="bet" ${disabled} onclick="bet('${g.away}', ${g.id})">
+        Bet ${g.away} $100
+      </button>
+    </div>`;
   });
 
+  document.getElementById("games").innerHTML = html;
+}
+
+// BET SYSTEM
+function bet(team, gameId) {
+  if (balance < 100) return alert("Not enough money!");
+
+  sound();
+
+  balance -= 100;
+
+  bets.push({
+    team,
+    gameId,
+    amount:100,
+    status:"ACTIVE"
+  });
+
+  save();
+  updateBalance();
   renderBets();
 }
 
-// simulate match ending after 10 seconds
-setTimeout(() => {
-  document.getElementById("status1").innerText = "(FINISHED)";
+// AUTO RESOLVE GAMES
+function checkGames() {
 
-  document.getElementById("a1").disabled = true;
-  document.getElementById("a2").disabled = true;
+  games.forEach(g => {
 
-  resolveMatch("Argentina");
-}, 10000);
+    if (g.status === "FINISHED") {
 
-function resolveMatch(winner) {
-  bets.forEach(b => {
-    if (b.status === "ACTIVE") {
-      if (b.team === winner) {
-        b.status = "WON";
-        balance += 200;
-      } else {
-        b.status = "LOST";
-      }
+      bets.forEach(b => {
+
+        if (b.gameId === g.id && b.status === "ACTIVE") {
+
+          let winner = Math.random() > 0.5 ? g.home : g.away;
+
+          if (b.team === winner) {
+            b.status = "WON";
+            balance += 200;
+          } else {
+            b.status = "LOST";
+          }
+        }
+      });
     }
   });
 
+  save();
   updateBalance();
   renderBets();
   renderHistory();
 }
 
+// BET LIST
 function renderBets() {
-  let el = document.getElementById("activeBets");
   let active = bets.filter(b => b.status === "ACTIVE");
 
-  if (active.length === 0) {
-    el.innerHTML = "No active bets";
-    return;
-  }
-
-  el.innerHTML = active.map(b => 
-    `${b.team} - $${b.amount}`
-  ).join("<br>");
+  document.getElementById("activeBets").innerHTML =
+    active.length ? active.map(b => `${b.team} - $${b.amount}`).join("<br>") : "No active bets";
 }
 
+// HISTORY
 function renderHistory() {
-  let el = document.getElementById("historyList");
   let done = bets.filter(b => b.status !== "ACTIVE");
 
-  if (done.length === 0) {
-    el.innerHTML = "No results yet";
-    return;
-  }
-
-  el.innerHTML = done.map(b =>
-    `${b.team} - ${b.status}`
-  ).join("<br>");
+  document.getElementById("historyList").innerHTML =
+    done.length ? done.map(b => `${b.team} - ${b.status}`).join("<br>") : "No history";
 }
 
+// LOOP (updates everything automatically)
+setInterval(() => {
+  renderGames();
+  checkGames();
+}, 2000);
+
+// INIT
 updateBalance();
+renderGames();
+renderBets();
+renderHistory();
+
 </script>
 
 </body>
