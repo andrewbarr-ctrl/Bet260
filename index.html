@@ -1,11 +1,206 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Bet260</title>
+  <title>Bet260</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #0b0f14;
+      color: #e6e6e6;
+      margin: 0;
+      text-align: center;
+    }
+
+    h1 {
+      color: #00ff88;
+      margin-top: 15px;
+    }
+
+    .nav {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin: 10px;
+    }
+
+    .nav button {
+      background: #1a222d;
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .nav button:hover {
+      background: #2a3442;
+    }
+
+    .box {
+      background: #151c24;
+      margin: 10px auto;
+      padding: 15px;
+      width: 90%;
+      max-width: 600px;
+      border-radius: 12px;
+    }
+
+    button.bet {
+      background: #00ff88;
+      border: none;
+      padding: 8px;
+      margin: 5px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button.bet:disabled {
+      background: #555;
+      cursor: not-allowed;
+    }
+
+    .small {
+      color: #aaa;
+      font-size: 13px;
+    }
+
+    .hidden { display: none; }
+  </style>
 </head>
+
 <body>
-<h1>Bet260</h1>
-<p>Balance: $1000</p>
-<p>Website coming soon...</p>
+
+<h1>Bet260 ⚽</h1>
+<h2 id="balance">Balance: $1000</h2>
+
+<div class="nav">
+  <button onclick="showTab('games')">Games</button>
+  <button onclick="showTab('bets')">My Bets</button>
+  <button onclick="showTab('history')">History</button>
+</div>
+
+<!-- GAMES -->
+<div id="games">
+
+  <div class="box">
+    <h3>World Cup Games</h3>
+
+    <p>Argentina vs Algeria <span id="status1">(UPCOMING)</span></p>
+
+    <button class="bet" id="a1" onclick="placeBet('Argentina', 1)">Bet Argentina $100</button>
+    <button class="bet" id="a2" onclick="placeBet('Algeria', 1)">Bet Algeria $100</button>
+  </div>
+
+</div>
+
+<!-- MY BETS -->
+<div id="bets" class="hidden">
+  <div class="box">
+    <h3>My Bets</h3>
+    <div id="activeBets">No active bets</div>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div id="history" class="hidden">
+  <div class="box">
+    <h3>History</h3>
+    <div id="historyList">No results yet</div>
+  </div>
+</div>
+
+<script>
+let balance = 1000;
+let bets = [];
+
+function updateBalance() {
+  document.getElementById("balance").innerText = "Balance: $" + balance;
+}
+
+function showTab(tab) {
+  document.getElementById("games").classList.add("hidden");
+  document.getElementById("bets").classList.add("hidden");
+  document.getElementById("history").classList.add("hidden");
+
+  document.getElementById(tab).classList.remove("hidden");
+}
+
+function placeBet(team, gameId) {
+  if (balance < 100) {
+    alert("Not enough money!");
+    return;
+  }
+
+  balance -= 100;
+  updateBalance();
+
+  bets.push({
+    team: team,
+    amount: 100,
+    status: "ACTIVE"
+  });
+
+  renderBets();
+}
+
+// simulate match ending after 10 seconds
+setTimeout(() => {
+  document.getElementById("status1").innerText = "(FINISHED)";
+
+  document.getElementById("a1").disabled = true;
+  document.getElementById("a2").disabled = true;
+
+  resolveMatch("Argentina");
+}, 10000);
+
+function resolveMatch(winner) {
+  bets.forEach(b => {
+    if (b.status === "ACTIVE") {
+      if (b.team === winner) {
+        b.status = "WON";
+        balance += 200;
+      } else {
+        b.status = "LOST";
+      }
+    }
+  });
+
+  updateBalance();
+  renderBets();
+  renderHistory();
+}
+
+function renderBets() {
+  let el = document.getElementById("activeBets");
+  let active = bets.filter(b => b.status === "ACTIVE");
+
+  if (active.length === 0) {
+    el.innerHTML = "No active bets";
+    return;
+  }
+
+  el.innerHTML = active.map(b => 
+    `${b.team} - $${b.amount}`
+  ).join("<br>");
+}
+
+function renderHistory() {
+  let el = document.getElementById("historyList");
+  let done = bets.filter(b => b.status !== "ACTIVE");
+
+  if (done.length === 0) {
+    el.innerHTML = "No results yet";
+    return;
+  }
+
+  el.innerHTML = done.map(b =>
+    `${b.team} - ${b.status}`
+  ).join("<br>");
+}
+
+updateBalance();
+</script>
+
 </body>
 </html>
