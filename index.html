@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Bet260</title>
+<title>Bet260 ⚽</title>
 
 <style>
 body {
@@ -15,31 +15,32 @@ body {
 h1 { color: #00ff88; }
 
 .box {
-  background:#151c24;
-  margin:10px auto;
-  padding:15px;
-  width:90%;
-  max-width:600px;
-  border-radius:12px;
+  background: #151c24;
+  margin: 10px auto;
+  padding: 15px;
+  width: 90%;
+  max-width: 600px;
+  border-radius: 12px;
 }
 
 button {
-  background:#00ff88;
-  border:none;
-  padding:8px;
-  margin:5px;
-  border-radius:8px;
-  cursor:pointer;
+  background: #00ff88;
+  border: none;
+  padding: 8px;
+  margin: 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
 }
 
 button:disabled {
-  background:#555;
-  cursor:not-allowed;
+  background: #555;
+  cursor: not-allowed;
 }
 
-.nav button {
-  background:#1a222d;
-  color:white;
+.small {
+  color: #aaa;
+  font-size: 12px;
 }
 </style>
 </head>
@@ -51,7 +52,7 @@ button:disabled {
 
 <div class="box">
   <h3>Games</h3>
-  <div id="games">Loading matches...</div>
+  <div id="games">Loading...</div>
 </div>
 
 <div class="box">
@@ -66,25 +67,30 @@ button:disabled {
 
 <script>
 
-const API_KEY = "93e8109cc47447ebb4940f749d92a0dc"; 
+const API_KEY = "93e8109cc47447ebb4940f749d92a0dc";
 
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
 
+// SAVE DATA
 function save() {
   localStorage.setItem("balance", JSON.stringify(balance));
   localStorage.setItem("bets", JSON.stringify(bets));
 }
 
+// UPDATE UI
 function updateUI() {
   document.getElementById("balance").innerText = "Balance: $" + balance;
 }
 
+// FETCH MATCHES (REAL API)
 async function loadMatches() {
   try {
     const res = await fetch("https://api.football-data.org/v4/matches", {
-      headers: { "X-Auth-Token": API_KEY }
+      headers: {
+        "X-Auth-Token": API_KEY
+      }
     });
 
     const data = await res.json();
@@ -92,11 +98,14 @@ async function loadMatches() {
     matches = data.matches.slice(0, 6);
 
     renderMatches();
-  } catch (err) {
-    document.getElementById("games").innerHTML = "API not loaded (add key)";
+
+  } catch (e) {
+    document.getElementById("games").innerHTML =
+      "API not loaded (check key or limit)";
   }
 }
 
+// SHOW MATCHES
 function renderMatches() {
   let html = "";
 
@@ -106,8 +115,14 @@ function renderMatches() {
 
     html += `
       <div class="box">
-        <p>${m.homeTeam.name} vs ${m.awayTeam.name}</p>
+        <p><b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b></p>
+
         <p>Status: ${m.status}</p>
+
+        <p class="small">
+          Score: ${m.score.fullTime.home ?? "-"} :
+                 ${m.score.fullTime.away ?? "-"}
+        </p>
 
         <button ${open ? "" : "disabled"}
           onclick="bet('${m.homeTeam.name}', ${m.id})">
@@ -125,8 +140,13 @@ function renderMatches() {
   document.getElementById("games").innerHTML = html;
 }
 
+// PLACE BET
 function bet(team, id) {
-  if (balance < 100) return alert("No money!");
+
+  if (balance < 100) {
+    alert("Not enough balance!");
+    return;
+  }
 
   balance -= 100;
 
@@ -141,31 +161,68 @@ function bet(team, id) {
   renderBets();
 }
 
+// MY BETS
 function renderBets() {
+  let active = bets.filter(b => b.status === "ACTIVE");
+
   document.getElementById("bets").innerHTML =
-    bets.filter(b => b.status === "ACTIVE")
-      .map(b => `${b.team} - $100`)
-      .join("<br>") || "No bets";
+    active.length
+      ? active.map(b => `${b.team} - $100`).join("<br>")
+      : "No active bets";
 }
 
+// HISTORY
 function renderHistory() {
+  let done = bets.filter(b => b.status !== "ACTIVE");
+
   document.getElementById("history").innerHTML =
-    bets.filter(b => b.status !== "ACTIVE")
-      .map(b => `${b.team} - ${b.status}`)
-      .join("<br>") || "No history";
+    done.length
+      ? done.map(b => `${b.team} - ${b.status}`).join("<br>")
+      : "No history yet";
 }
 
-function update() {
+// CHECK RESULTS
+function checkResults() {
+
+  bets.forEach(b => {
+
+    let m = matches.find(x => x.id === b.gameId);
+    if (!m) return;
+
+    if (m.status === "FINISHED" && b.status === "ACTIVE") {
+
+      let home = m.score.fullTime.home;
+      let away = m.score.fullTime.away;
+
+      let winner =
+        home > away ? m.homeTeam.name : m.awayTeam.name;
+
+      if (b.team === winner) {
+        b.status = "WON";
+        balance += 200;
+      } else {
+        b.status = "LOST";
+      }
+    }
+  });
+
   save();
   updateUI();
   renderBets();
   renderHistory();
 }
 
-setInterval(loadMatches, 30000);
+// AUTO REFRESH
+setInterval(() => {
+  loadMatches();
+  checkResults();
+}, 30000);
 
+// START
 loadMatches();
 updateUI();
+renderBets();
+renderHistory();
 
 </script>
 
