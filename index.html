@@ -18,8 +18,8 @@ h1 { color: #00ff88; }
   background: #151c24;
   margin: 10px auto;
   padding: 15px;
-  width: 90%;
-  max-width: 650px;
+  width: 92%;
+  max-width: 700px;
   border-radius: 12px;
 }
 
@@ -52,7 +52,7 @@ button:disabled {
 
 <div class="box">
   <h3>Games</h3>
-  <div id="games">Loading...</div>
+  <div id="games">Loading matches...</div>
 </div>
 
 <div class="box">
@@ -67,51 +67,62 @@ button:disabled {
 
 <script>
 
-const API_KEY = "fake";
-
+// =====================
+// STATE (SAVED DATA)
+// =====================
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
 
-// SAVE
+// =====================
+// SAVE FUNCTION
+// =====================
 function save() {
   localStorage.setItem("balance", JSON.stringify(balance));
   localStorage.setItem("bets", JSON.stringify(bets));
 }
 
-// UI
+// =====================
+// UI UPDATE
+// =====================
 function updateUI() {
   document.getElementById("balance").innerText = "Balance: $" + balance;
 }
 
-// 🔥 LOAD MATCHES FROM YOUR WORKER (FIXED)
+// =====================
+// LOAD MATCHES (WORKER FIX)
+// =====================
 async function loadMatches() {
   try {
     const res = await fetch("https://curly-union-9418.andrewbarr.workers.dev/");
     const data = await res.json();
 
     matches = data.matches || [];
-    matches = matches.slice(0, 8);
+    matches = matches.slice(0, 10);
 
     renderMatches();
 
-  } catch (e) {
-    console.log(e);
+  } catch (err) {
+    console.log(err);
     document.getElementById("games").innerHTML =
       "Failed to load matches";
   }
 }
 
-// SHOW MATCHES
+// =====================
+// RENDER MATCHES
+// =====================
 function renderMatches() {
   let html = "";
 
   matches.forEach(m => {
 
-    const open = m.status === "TIMED" || m.status === "SCHEDULED";
+    const open =
+      m.status === "TIMED" ||
+      m.status === "SCHEDULED";
 
-    const homeScore = m.score?.fullTime?.home ?? "-";
-    const awayScore = m.score?.fullTime?.away ?? "-";
+    const home = m.score?.fullTime?.home ?? "-";
+    const away = m.score?.fullTime?.away ?? "-";
 
     html += `
       <div class="box">
@@ -119,7 +130,7 @@ function renderMatches() {
 
         <p>Status: ${m.status}</p>
 
-        <p class="small">Score: ${homeScore} - ${awayScore}</p>
+        <p class="small">Score: ${home} - ${away}</p>
 
         <button ${open ? "" : "disabled"}
           onclick="bet('${m.homeTeam.name}', ${m.id})">
@@ -137,7 +148,9 @@ function renderMatches() {
   document.getElementById("games").innerHTML = html;
 }
 
-// BET
+// =====================
+// PLACE BET
+// =====================
 function bet(team, id) {
 
   if (balance < 100) {
@@ -158,7 +171,9 @@ function bet(team, id) {
   renderBets();
 }
 
-// MY BETS
+// =====================
+// ACTIVE BETS
+// =====================
 function renderBets() {
   const active = bets.filter(b => b.status === "ACTIVE");
 
@@ -168,7 +183,9 @@ function renderBets() {
       : "No active bets";
 }
 
+// =====================
 // HISTORY
+// =====================
 function renderHistory() {
   const done = bets.filter(b => b.status !== "ACTIVE");
 
@@ -178,7 +195,9 @@ function renderHistory() {
       : "No history yet";
 }
 
+// =====================
 // CHECK RESULTS
+// =====================
 function checkResults() {
 
   bets.forEach(b => {
@@ -186,12 +205,16 @@ function checkResults() {
     const m = matches.find(x => x.id === b.gameId);
     if (!m) return;
 
-    if (m.status === "FINISHED" && b.status === "ACTIVE") {
+    if (
+      (m.status === "FINISHED" ||
+       m.status === "PAUSED") &&
+      b.status === "ACTIVE"
+    ) {
 
       const home = m.score.fullTime.home;
       const away = m.score.fullTime.away;
 
-      const winner =
+      let winner =
         home > away ? m.homeTeam.name :
         away > home ? m.awayTeam.name :
         "DRAW";
@@ -211,13 +234,17 @@ function checkResults() {
   renderHistory();
 }
 
-// AUTO UPDATE
+// =====================
+// AUTO UPDATE LOOP
+// =====================
 setInterval(() => {
   loadMatches();
   checkResults();
 }, 20000);
 
+// =====================
 // START
+// =====================
 loadMatches();
 updateUI();
 renderBets();
