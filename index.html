@@ -14,6 +14,13 @@ body {
 
 h1 { color: #00ff88; }
 
+.top-bar {
+  background: #111922;
+  padding: 10px;
+  position: sticky;
+  top: 0;
+}
+
 .box {
   background: #151c24;
   margin: 10px auto;
@@ -48,21 +55,26 @@ button:disabled {
 <body>
 
 <h1>Bet260 ⚽</h1>
-<h2 id="balance">Balance: $1000</h2>
 
+<!-- TOP SECTION -->
+<div class="top-bar">
+  <h2 id="balance">Balance: $1000</h2>
+
+  <div class="box">
+    <h3>🔥 Active Bets</h3>
+    <div id="bets"></div>
+  </div>
+
+  <div class="box">
+    <h3>📜 History</h3>
+    <div id="history"></div>
+  </div>
+</div>
+
+<!-- GAMES -->
 <div class="box">
   <h3>Games</h3>
   <div id="games">Loading matches...</div>
-</div>
-
-<div class="box">
-  <h3>My Bets</h3>
-  <div id="bets"></div>
-</div>
-
-<div class="box">
-  <h3>History</h3>
-  <div id="history"></div>
 </div>
 
 <script>
@@ -88,12 +100,10 @@ async function loadMatches() {
     const data = await res.json();
 
     matches = (data.matches || []).slice(0, 10);
-
     renderMatches();
 
   } catch (e) {
     document.getElementById("games").innerHTML = "Failed to load matches";
-    console.log(e);
   }
 }
 
