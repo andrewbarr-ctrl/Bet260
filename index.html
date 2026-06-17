@@ -1,53 +1,56 @@
+```html
 <!DOCTYPE html>
 <html>
 <head>
 <title>Bet260 ⚽</title>
 
 <style>
-body {
-  font-family: Arial;
-  background: #0b0f14;
-  color: #e6e6e6;
-  margin: 0;
-  text-align: center;
+body{
+  font-family:Arial,sans-serif;
+  background:#0b0f14;
+  color:white;
+  margin:0;
+  text-align:center;
 }
 
-h1 { color: #00ff88; }
-
-.box {
-  background: #151c24;
-  margin: 10px auto;
-  padding: 15px;
-  width: 90%;
-  max-width: 600px;
-  border-radius: 12px;
+h1{
+  color:#00ff88;
 }
 
-button {
-  background: #00ff88;
-  border: none;
-  padding: 8px;
-  margin: 5px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
+.box{
+  background:#151c24;
+  margin:12px auto;
+  padding:15px;
+  width:90%;
+  max-width:700px;
+  border-radius:12px;
 }
 
-button:disabled {
-  background: #555;
-  cursor: not-allowed;
+button{
+  background:#00ff88;
+  border:none;
+  padding:10px;
+  margin:5px;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:bold;
 }
 
-.small {
-  color: #aaa;
-  font-size: 12px;
+button:disabled{
+  background:#555;
+  cursor:not-allowed;
+}
+
+.small{
+  color:#aaa;
 }
 </style>
-</head>
 
+</head>
 <body>
 
 <h1>Bet260 ⚽</h1>
+
 <h2 id="balance">Balance: $1000</h2>
 
 <div class="box">
@@ -57,82 +60,111 @@ button:disabled {
 
 <div class="box">
   <h3>My Bets</h3>
-  <div id="bets"></div>
+  <div id="bets">No active bets</div>
 </div>
 
 <div class="box">
   <h3>History</h3>
-  <div id="history"></div>
+  <div id="history">No history yet</div>
 </div>
 
 <script>
 
-const API_KEY = "93e8109cc47447ebb4940f749d92a0dc";
+let balance =
+Number(localStorage.getItem("balance")) || 1000;
 
-let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
-let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
+let bets =
+JSON.parse(localStorage.getItem("bets")) || [];
+
 let matches = [];
 
-// SAVE DATA
-function save() {
-  localStorage.setItem("balance", JSON.stringify(balance));
-  localStorage.setItem("bets", JSON.stringify(bets));
+function saveData(){
+  localStorage.setItem("balance",balance);
+  localStorage.setItem("bets",JSON.stringify(bets));
 }
 
-// UPDATE UI
-function updateUI() {
-  document.getElementById("balance").innerText = "Balance: $" + balance;
+function updateBalance(){
+  document.getElementById("balance").innerText =
+  "Balance: $" + balance;
 }
 
-// FETCH MATCHES (REAL API)
-async function loadMatches() {
-  try {
-    const res = await fetch("https://api.football-data.org/v4/matches", {
-      headers: {
-        "X-Auth-Token": API_KEY
-      }
-    });
+async function loadMatches(){
+
+  try{
+
+    const res = await fetch(
+      "https://curly-union-9418.andrewbarr.workers.dev"
+    );
 
     const data = await res.json();
 
-    matches = data.matches.slice(0, 6);
+    matches = data.matches || [];
 
     renderMatches();
+    checkResults();
 
-  } catch (e) {
+  }catch(err){
+
     document.getElementById("games").innerHTML =
-      "API not loaded (check key or limit)";
+    "Failed to load matches";
+
+    console.error(err);
+
   }
 }
 
-// SHOW MATCHES
-function renderMatches() {
+function renderMatches(){
+
   let html = "";
 
-  matches.forEach(m => {
+  matches.forEach(m=>{
 
-    let open = m.status === "SCHEDULED";
+    const open =
+    m.status === "TIMED" ||
+    m.status === "SCHEDULED";
+
+    const homeScore =
+    m.score?.fullTime?.home ?? "-";
+
+    const awayScore =
+    m.score?.fullTime?.away ?? "-";
+
+    let statusText = "";
+
+    if(open){
+      statusText = "🟢 Betting Open";
+    }else if(
+      m.status === "IN_PLAY" ||
+      m.status === "LIVE"
+    ){
+      statusText = "🟡 Live";
+    }else{
+      statusText = "🔴 Finished";
+    }
 
     html += `
       <div class="box">
-        <p><b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b></p>
 
-        <p>Status: ${m.status}</p>
+        <h3>${m.homeTeam.name} vs ${m.awayTeam.name}</h3>
+
+        <p>${statusText}</p>
 
         <p class="small">
-          Score: ${m.score.fullTime.home ?? "-"} :
-                 ${m.score.fullTime.away ?? "-"}
+          Score: ${homeScore} - ${awayScore}
         </p>
 
-        <button ${open ? "" : "disabled"}
-          onclick="bet('${m.homeTeam.name}', ${m.id})">
-          Bet ${m.homeTeam.name}
+        <button
+        ${open ? "" : "disabled"}
+        onclick="placeBet('${m.homeTeam.name}',${m.id})">
+        Bet ${m.homeTeam.name}
         </button>
 
-        <button ${open ? "" : "disabled"}
-          onclick="bet('${m.awayTeam.name}', ${m.id})">
-          Bet ${m.awayTeam.name}
+        <button
+        ${open ? "" : "disabled"}
+        onclick="placeBet('${m.awayTeam.name}',${m.id})">
+        Bet ${m.awayTeam.name}
         </button>
+
       </div>
     `;
   });
@@ -140,91 +172,116 @@ function renderMatches() {
   document.getElementById("games").innerHTML = html;
 }
 
-// PLACE BET
-function bet(team, id) {
+function placeBet(team,gameId){
 
-  if (balance < 100) {
-    alert("Not enough balance!");
+  if(balance < 100){
+    alert("Not enough balance");
     return;
   }
 
   balance -= 100;
 
   bets.push({
-    team,
-    gameId: id,
-    status: "ACTIVE"
+    team:team,
+    gameId:gameId,
+    amount:100,
+    status:"ACTIVE"
   });
 
-  save();
-  updateUI();
+  saveData();
+
+  updateBalance();
   renderBets();
 }
 
-// MY BETS
-function renderBets() {
-  let active = bets.filter(b => b.status === "ACTIVE");
+function renderBets(){
+
+  const active =
+  bets.filter(b=>b.status==="ACTIVE");
 
   document.getElementById("bets").innerHTML =
-    active.length
-      ? active.map(b => `${b.team} - $100`).join("<br>")
-      : "No active bets";
+  active.length
+  ? active.map(
+    b=>`${b.team} - $${b.amount}`
+  ).join("<br>")
+  : "No active bets";
 }
 
-// HISTORY
-function renderHistory() {
-  let done = bets.filter(b => b.status !== "ACTIVE");
+function renderHistory(){
+
+  const done =
+  bets.filter(b=>b.status!=="ACTIVE");
 
   document.getElementById("history").innerHTML =
-    done.length
-      ? done.map(b => `${b.team} - ${b.status}`).join("<br>")
-      : "No history yet";
+  done.length
+  ? done.map(
+    b=>`${b.team} - ${b.status}`
+  ).join("<br>")
+  : "No history yet";
 }
 
-// CHECK RESULTS
-function checkResults() {
+function checkResults(){
 
-  bets.forEach(b => {
+  bets.forEach(b=>{
 
-    let m = matches.find(x => x.id === b.gameId);
-    if (!m) return;
+    const m =
+    matches.find(x=>x.id===b.gameId);
 
-    if (m.status === "FINISHED" && b.status === "ACTIVE") {
+    if(!m) return;
 
-      let home = m.score.fullTime.home;
-      let away = m.score.fullTime.away;
+    if(
+      m.status==="FINISHED" &&
+      b.status==="ACTIVE"
+    ){
 
-      let winner =
-        home > away ? m.homeTeam.name : m.awayTeam.name;
+      const home =
+      m.score.fullTime.home;
 
-      if (b.team === winner) {
+      const away =
+      m.score.fullTime.away;
+
+      let winner = null;
+
+      if(home > away){
+        winner = m.homeTeam.name;
+      }
+
+      if(away > home){
+        winner = m.awayTeam.name;
+      }
+
+      if(b.team === winner){
+
         b.status = "WON";
+
         balance += 200;
-      } else {
+
+      }else{
+
         b.status = "LOST";
       }
+
     }
+
   });
 
-  save();
-  updateUI();
+  saveData();
+
+  updateBalance();
   renderBets();
   renderHistory();
 }
 
-// AUTO REFRESH
-setInterval(() => {
-  loadMatches();
-  checkResults();
-}, 30000);
-
-// START
-loadMatches();
-updateUI();
+updateBalance();
 renderBets();
 renderHistory();
+
+loadMatches();
+
+setInterval(loadMatches,15000);
 
 </script>
 
 </body>
 </html>
+```
