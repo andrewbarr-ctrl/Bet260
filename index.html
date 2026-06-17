@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Bet260 ⚽</title>
+<title>Bet260 ⚽ PRO</title>
 
 <style>
 body {
@@ -12,7 +12,6 @@ body {
   text-align: center;
 }
 
-/* TOP BAR */
 .topbar {
   display: flex;
   justify-content: center;
@@ -55,53 +54,46 @@ button {
 
 button:disabled {
   background: #444;
-  cursor: not-allowed;
+}
+
+.selected {
+  border: 2px solid yellow;
+  box-shadow: 0 0 10px yellow;
 }
 
 .small {
   color: #aaa;
   font-size: 12px;
 }
-
-/* SELECTED TEAM HIGHLIGHT */
-.selected {
-  border: 2px solid yellow;
-  box-shadow: 0 0 10px yellow;
-}
 </style>
 </head>
 
 <body>
 
-<h1>Bet260 ⚽</h1>
+<h1>Bet260 ⚽ PRO</h1>
 <h2 id="balance">Balance: $1000</h2>
 
-<!-- TOP NAV -->
 <div class="topbar">
   <button onclick="showTab('games')">Games</button>
   <button onclick="showTab('bets')">Bets</button>
   <button onclick="showTab('history')">History</button>
 </div>
 
-<!-- BET AMOUNT -->
 <div class="box">
   <h3>Bet Amount</h3>
-  <input type="number" id="betAmount" value="100" min="1">
+  <input type="number" id="betAmount" value="100">
 </div>
 
-<!-- GAMES -->
 <div id="gamesTab" class="box">
   <h3>Games</h3>
-  <div id="games">Loading matches...</div>
+  <div id="games">Loading...</div>
 </div>
 
-<!-- BETS -->
 <div id="betsTab" class="box" style="display:none">
   <h3>My Bets</h3>
   <div id="bets"></div>
 </div>
 
-<!-- HISTORY -->
 <div id="historyTab" class="box" style="display:none">
   <h3>History</h3>
   <div id="history"></div>
@@ -109,42 +101,36 @@ button:disabled {
 
 <script>
 
-// =====================
-// API
-// =====================
 const API_URL = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
 
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
 
-// =====================
-// SAVE
-// =====================
+// win streak bonus
+let streak = 0;
+
 function save() {
   localStorage.setItem("balance", JSON.stringify(balance));
   localStorage.setItem("bets", JSON.stringify(bets));
 }
 
-// =====================
-// UI
-// =====================
 function updateUI() {
-  document.getElementById("balance").innerText = "Balance: $" + balance;
+  document.getElementById("balance").innerText =
+    "Balance: $" + balance + " | Streak: " + streak;
 }
 
-// =====================
-// TABS
-// =====================
 function showTab(tab) {
   document.getElementById("gamesTab").style.display = tab === "games" ? "block" : "none";
   document.getElementById("betsTab").style.display = tab === "bets" ? "block" : "none";
   document.getElementById("historyTab").style.display = tab === "history" ? "block" : "none";
 }
 
-// =====================
-// LOAD MATCHES (WORKER)
-// =====================
+// stable odds per match
+function getOdds(id) {
+  return (1.2 + (id % 5) * 0.4).toFixed(2);
+}
+
 async function loadMatches() {
   try {
     const res = await fetch(API_URL);
@@ -153,38 +139,38 @@ async function loadMatches() {
     matches = data.matches || [];
     renderMatches();
 
-  } catch (err) {
+  } catch {
     document.getElementById("games").innerHTML = "Failed to load matches";
   }
 }
 
-// =====================
-// RENDER MATCHES
-// =====================
 function renderMatches() {
+
   let html = "";
 
   matches.forEach(m => {
 
     const home = m.score?.fullTime?.home ?? "-";
     const away = m.score?.fullTime?.away ?? "-";
+    const odds = getOdds(m.id);
 
-    const open = m.status === "TIMED" || m.status === "SCHEDULED";
+    const open = m.status === "TIMED";
 
     html += `
       <div class="box">
         <p><b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b></p>
 
-        <p class="small">${m.status}</p>
+        <p class="small">Odds: ${odds}x</p>
+        <p class="small">Status: ${m.status}</p>
         <p class="small">Score: ${home} - ${away}</p>
 
         <button ${open ? "" : "disabled"}
-          onclick="bet('${m.homeTeam.name}', ${m.id}, this)">
+          onclick="bet('${m.homeTeam.name}', ${m.id}, ${odds}, this)">
           Bet ${m.homeTeam.name}
         </button>
 
         <button ${open ? "" : "disabled"}
-          onclick="bet('${m.awayTeam.name}', ${m.id}, this)">
+          onclick="bet('${m.awayTeam.name}', ${m.id}, ${odds}, this)">
           Bet ${m.awayTeam.name}
         </button>
       </div>
@@ -194,32 +180,21 @@ function renderMatches() {
   document.getElementById("games").innerHTML = html;
 }
 
-// =====================
-// BET FUNCTION (ANY AMOUNT)
-// =====================
-function bet(team, id, btn) {
+function bet(team, id, odds, btn) {
 
   let amount = parseInt(document.getElementById("betAmount").value);
 
-  if (!amount || amount <= 0) {
-    alert("Enter valid bet amount");
-    return;
-  }
-
-  if (amount > balance) {
-    alert("Not enough balance!");
-    return;
-  }
-
-  // highlight button
-  btn.classList.add("selected");
+  if (!amount || amount > balance) return alert("Invalid bet");
 
   balance -= amount;
+
+  btn.classList.add("selected");
 
   bets.push({
     team,
     gameId: id,
     amount,
+    odds,
     status: "ACTIVE"
   });
 
@@ -228,47 +203,59 @@ function bet(team, id, btn) {
   renderBets();
 }
 
-// =====================
-// BETS
-// =====================
+function cashOut(index) {
+
+  let b = bets[index];
+  if (b.status !== "ACTIVE") return;
+
+  let payout = Math.floor(b.amount * b.odds);
+
+  balance += payout;
+
+  b.status = "CASHED OUT";
+
+  save();
+  updateUI();
+  renderBets();
+  renderHistory();
+}
+
 function renderBets() {
 
-  const active = bets.filter(b => b.status === "ACTIVE");
+  let active = bets.filter(b => b.status === "ACTIVE");
 
   document.getElementById("bets").innerHTML =
     active.length
-      ? active.map(b =>
-          `${b.team} - $${b.amount}`
-        ).join("<br>")
+      ? active.map((b, i) =>
+          `
+          ${b.team} - $${b.amount} (${b.odds}x)
+          <button onclick="cashOut(${bets.indexOf(b)})">Cash Out</button>
+          <br>
+          `
+        ).join("")
       : "No active bets";
 }
 
-// =====================
-// HISTORY
-// =====================
 function renderHistory() {
 
-  const done = bets.filter(b => b.status !== "ACTIVE");
+  let done = bets.filter(b => b.status !== "ACTIVE");
 
   document.getElementById("history").innerHTML =
     done.length
       ? done.map(b =>
           `${b.team} - ${b.status} - $${b.amount}`
         ).join("<br>")
-      : "No history yet";
+      : "No history";
 }
 
-// =====================
-// CHECK RESULTS
-// =====================
 function checkResults() {
 
   bets.forEach(b => {
 
     const m = matches.find(x => x.id === b.gameId);
-    if (!m) return;
+    if (!m || b.status !== "ACTIVE") return;
 
-    if (m.status === "FINISHED" && b.status === "ACTIVE") {
+    if (m.status === "FINISHED") {
 
       const home = m.score.fullTime.home;
       const away = m.score.fullTime.away;
@@ -279,9 +266,19 @@ function checkResults() {
         "DRAW";
 
       if (b.team === winner) {
+
+        streak++;
+
+        let payout = Math.floor(b.amount * b.odds);
+
+        // streak bonus
+        if (streak >= 3) payout *= 1.5;
+
+        balance += payout;
         b.status = "WON";
-        balance += b.amount * 2;
+
       } else {
+        streak = 0;
         b.status = "LOST";
       }
     }
@@ -293,17 +290,11 @@ function checkResults() {
   renderHistory();
 }
 
-// =====================
-// LOOP
-// =====================
 setInterval(() => {
   loadMatches();
   checkResults();
 }, 20000);
 
-// =====================
-// START
-// =====================
 loadMatches();
 updateUI();
 renderBets();
