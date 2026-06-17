@@ -14,11 +14,33 @@ body {
 
 h1 { color: #00ff88; }
 
-.top-bar {
-  background: #111922;
-  padding: 10px;
+.topnav {
   position: sticky;
   top: 0;
+  background: #111922;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 1000;
+}
+
+.topnav button {
+  background: #00ff88;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.page {
+  display: none;
+  padding: 10px;
+}
+
+.active {
+  display: block;
 }
 
 .box {
@@ -49,32 +71,58 @@ button:disabled {
   color: #aaa;
   font-size: 12px;
 }
+
+.selected {
+  border: 2px solid #00ff88;
+  box-shadow: 0 0 10px #00ff88;
+}
 </style>
 </head>
 
 <body>
 
 <h1>Bet260 ⚽</h1>
+<h2 id="balance">Balance: $1000</h2>
 
-<!-- TOP SECTION -->
-<div class="top-bar">
-  <h2 id="balance">Balance: $1000</h2>
+<!-- NAV -->
+<div class="topnav">
+  <button onclick="showPage('games')">⚽ Games</button>
+  <button onclick="showPage('bets')">💰 Bets</button>
+  <button onclick="showPage('history')">📜 History</button>
+</div>
 
-  <div class="box">
-    <h3>🔥 Active Bets</h3>
-    <div id="bets"></div>
-  </div>
-
-  <div class="box">
-    <h3>📜 History</h3>
-    <div id="history"></div>
-  </div>
+<!-- BET AMOUNT -->
+<div class="box">
+  <h3>Bet Amount</h3>
+  <button onclick="setAmount(10)">$10</button>
+  <button onclick="setAmount(50)">$50</button>
+  <button onclick="setAmount(100)">$100</button>
+  <button onclick="setAmount(200)">$200</button>
+  <p class="small">Selected: $<span id="amount">100</span></p>
 </div>
 
 <!-- GAMES -->
-<div class="box">
-  <h3>Games</h3>
-  <div id="games">Loading matches...</div>
+<div id="gamesPage" class="page active">
+  <div class="box">
+    <h3>Games</h3>
+    <div id="games">Loading...</div>
+  </div>
+</div>
+
+<!-- BETS -->
+<div id="betsPage" class="page">
+  <div class="box">
+    <h3>Your Bets</h3>
+    <div id="bets"></div>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div id="historyPage" class="page">
+  <div class="box">
+    <h3>History</h3>
+    <div id="history"></div>
+  </div>
 </div>
 
 <script>
@@ -84,6 +132,7 @@ const API = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
+let betAmount = 100;
 
 function save() {
   localStorage.setItem("balance", JSON.stringify(balance));
@@ -92,6 +141,16 @@ function save() {
 
 function updateUI() {
   document.getElementById("balance").innerText = "Balance: $" + balance;
+}
+
+function setAmount(a) {
+  betAmount = a;
+  document.getElementById("amount").innerText = a;
+}
+
+function showPage(page) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById(page + "Page").classList.add("active");
 }
 
 async function loadMatches() {
@@ -117,18 +176,20 @@ function renderMatches() {
     const home = m.score?.fullTime?.home ?? "-";
     const away = m.score?.fullTime?.away ?? "-";
 
+    const betOn = bets.find(b => b.gameId === m.id && b.status === "ACTIVE");
+
     html += `
-      <div class="box">
+      <div class="box ${betOn ? 'selected' : ''}">
         <p><b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b></p>
         <p>Status: ${m.status}</p>
         <p class="small">Score: ${home} - ${away}</p>
 
         <button ${open ? "" : "disabled"} onclick="bet('${m.homeTeam.name}', ${m.id})">
-          Bet ${m.homeTeam.name}
+          Bet ${m.homeTeam.name} ($${betAmount})
         </button>
 
         <button ${open ? "" : "disabled"} onclick="bet('${m.awayTeam.name}', ${m.id})">
-          Bet ${m.awayTeam.name}
+          Bet ${m.awayTeam.name} ($${betAmount})
         </button>
       </div>
     `;
@@ -144,16 +205,17 @@ function bet(team, id) {
     return;
   }
 
-  if (balance < 100) {
+  if (balance < betAmount) {
     alert("Not enough balance!");
     return;
   }
 
-  balance -= 100;
+  balance -= betAmount;
 
   bets.push({
     team,
     gameId: id,
+    amount: betAmount,
     status: "ACTIVE"
   });
 
@@ -167,7 +229,7 @@ function renderBets() {
 
   document.getElementById("bets").innerHTML =
     active.length
-      ? active.map(b => `${b.team} - $100`).join("<br>")
+      ? active.map(b => `${b.team} - $${b.amount}`).join("<br>")
       : "No active bets";
 }
 
@@ -176,7 +238,7 @@ function renderHistory() {
 
   document.getElementById("history").innerHTML =
     done.length
-      ? done.map(b => `${b.team} - ${b.status}`).join("<br>")
+      ? done.map(b => `${b.team} - ${b.status} ($${b.amount})`).join("<br>")
       : "No history yet";
 }
 
@@ -199,7 +261,7 @@ function checkResults() {
 
       if (b.team === winner) {
         b.status = "WON";
-        balance += 200;
+        balance += b.amount * 2;
       } else {
         b.status = "LOST";
       }
