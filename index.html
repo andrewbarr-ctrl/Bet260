@@ -1,48 +1,48 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Bet260 ⚽</title>
+<title>Bet260 ⚽</title>
 
-  <style>
-    body {
-      font-family: Arial;
-      background: #0b0f14;
-      color: #e6e6e6;
-      margin: 0;
-      text-align: center;
-    }
+<style>
+body {
+  font-family: Arial;
+  background: #0b0f14;
+  color: #e6e6e6;
+  margin: 0;
+  text-align: center;
+}
 
-    h1 { color: #00ff88; }
+h1 { color: #00ff88; }
 
-    .box {
-      background: #151c24;
-      margin: 10px auto;
-      padding: 15px;
-      width: 92%;
-      max-width: 700px;
-      border-radius: 12px;
-    }
+.box {
+  background: #151c24;
+  margin: 10px auto;
+  padding: 15px;
+  width: 92%;
+  max-width: 700px;
+  border-radius: 12px;
+}
 
-    button {
-      background: #00ff88;
-      border: none;
-      padding: 8px 10px;
-      margin: 5px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: bold;
-    }
+button {
+  background: #00ff88;
+  border: none;
+  padding: 8px 10px;
+  margin: 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
 
-    button:disabled {
-      background: #444;
-      cursor: not-allowed;
-    }
+button:disabled {
+  background: #444;
+  cursor: not-allowed;
+}
 
-    .small {
-      color: #aaa;
-      font-size: 12px;
-    }
-  </style>
+.small {
+  color: #aaa;
+  font-size: 12px;
+}
+</style>
 </head>
 
 <body>
@@ -67,50 +67,36 @@
 
 <script>
 
-// =====================
-// DATA
-// =====================
+const API = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
+
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
 
-const WORKER_URL = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
-
-// =====================
-// SAVE
-// =====================
 function save() {
   localStorage.setItem("balance", JSON.stringify(balance));
   localStorage.setItem("bets", JSON.stringify(bets));
 }
 
-// =====================
-// UI
-// =====================
 function updateUI() {
   document.getElementById("balance").innerText = "Balance: $" + balance;
 }
 
-// =====================
-// LOAD MATCHES
-// =====================
 async function loadMatches() {
   try {
-    const res = await fetch(WORKER_URL);
+    const res = await fetch(API);
     const data = await res.json();
 
-    matches = data.matches || [];
+    matches = (data.matches || []).slice(0, 10);
+
     renderMatches();
 
   } catch (e) {
-    console.log(e);
     document.getElementById("games").innerHTML = "Failed to load matches";
+    console.log(e);
   }
 }
 
-// =====================
-// RENDER MATCHES
-// =====================
 function renderMatches() {
   let html = "";
 
@@ -124,18 +110,14 @@ function renderMatches() {
     html += `
       <div class="box">
         <p><b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b></p>
-
         <p>Status: ${m.status}</p>
-
         <p class="small">Score: ${home} - ${away}</p>
 
-        <button ${open ? "" : "disabled"}
-          onclick="bet('${m.homeTeam.name}', ${m.id})">
+        <button ${open ? "" : "disabled"} onclick="bet('${m.homeTeam.name}', ${m.id})">
           Bet ${m.homeTeam.name}
         </button>
 
-        <button ${open ? "" : "disabled"}
-          onclick="bet('${m.awayTeam.name}', ${m.id})">
+        <button ${open ? "" : "disabled"} onclick="bet('${m.awayTeam.name}', ${m.id})">
           Bet ${m.awayTeam.name}
         </button>
       </div>
@@ -145,11 +127,17 @@ function renderMatches() {
   document.getElementById("games").innerHTML = html;
 }
 
-// =====================
-// BET SYSTEM
-// =====================
 function bet(team, id) {
-  if (balance < 100) return alert("Not enough balance!");
+
+  if (bets.some(b => b.gameId === id && b.status === "ACTIVE")) {
+    alert("You already bet on this match!");
+    return;
+  }
+
+  if (balance < 100) {
+    alert("Not enough balance!");
+    return;
+  }
 
   balance -= 100;
 
@@ -164,9 +152,6 @@ function bet(team, id) {
   renderBets();
 }
 
-// =====================
-// BETS
-// =====================
 function renderBets() {
   const active = bets.filter(b => b.status === "ACTIVE");
 
@@ -176,9 +161,6 @@ function renderBets() {
       : "No active bets";
 }
 
-// =====================
-// HISTORY
-// =====================
 function renderHistory() {
   const done = bets.filter(b => b.status !== "ACTIVE");
 
@@ -188,21 +170,19 @@ function renderHistory() {
       : "No history yet";
 }
 
-// =====================
-// CHECK RESULTS
-// =====================
 function checkResults() {
+
   bets.forEach(b => {
 
     const m = matches.find(x => x.id === b.gameId);
     if (!m) return;
 
-    if (m.status === "FINISHED" && b.status === "ACTIVE") {
+    if ((m.status === "FINISHED" || m.status === "PAUSED") && b.status === "ACTIVE") {
 
-      const home = m.score.fullTime.home;
-      const away = m.score.fullTime.away;
+      const home = m.score?.fullTime?.home ?? 0;
+      const away = m.score?.fullTime?.away ?? 0;
 
-      const winner =
+      let winner =
         home > away ? m.homeTeam.name :
         away > home ? m.awayTeam.name :
         "DRAW";
@@ -222,15 +202,11 @@ function checkResults() {
   renderHistory();
 }
 
-// =====================
-// LOOP
-// =====================
 setInterval(() => {
   loadMatches();
   checkResults();
-}, 20000);
+}, 60000);
 
-// START
 loadMatches();
 updateUI();
 renderBets();
