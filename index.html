@@ -12,36 +12,27 @@ body {
   text-align: center;
 }
 
-h1 { color: #00ff88; }
-
-.topnav {
-  position: sticky;
-  top: 0;
-  background: #111922;
-  padding: 10px;
+/* TOP BAR */
+.topbar {
   display: flex;
   justify-content: center;
   gap: 10px;
-  z-index: 1000;
+  padding: 10px;
+  background: #111823;
+  position: sticky;
+  top: 0;
 }
 
-.topnav button {
+.topbar button {
   background: #00ff88;
   border: none;
   padding: 8px 12px;
   border-radius: 8px;
-  cursor: pointer;
   font-weight: bold;
+  cursor: pointer;
 }
 
-.page {
-  display: none;
-  padding: 10px;
-}
-
-.active {
-  display: block;
-}
+h1 { color: #00ff88; }
 
 .box {
   background: #151c24;
@@ -72,9 +63,10 @@ button:disabled {
   font-size: 12px;
 }
 
+/* SELECTED TEAM HIGHLIGHT */
 .selected {
-  border: 2px solid #00ff88;
-  box-shadow: 0 0 10px #00ff88;
+  border: 2px solid yellow;
+  box-shadow: 0 0 10px yellow;
 }
 </style>
 </head>
@@ -84,112 +76,116 @@ button:disabled {
 <h1>Bet260 ⚽</h1>
 <h2 id="balance">Balance: $1000</h2>
 
-<!-- NAV -->
-<div class="topnav">
-  <button onclick="showPage('games')">⚽ Games</button>
-  <button onclick="showPage('bets')">💰 Bets</button>
-  <button onclick="showPage('history')">📜 History</button>
+<!-- TOP NAV -->
+<div class="topbar">
+  <button onclick="showTab('games')">Games</button>
+  <button onclick="showTab('bets')">Bets</button>
+  <button onclick="showTab('history')">History</button>
 </div>
 
 <!-- BET AMOUNT -->
 <div class="box">
   <h3>Bet Amount</h3>
-  <button onclick="setAmount(10)">$10</button>
-  <button onclick="setAmount(50)">$50</button>
-  <button onclick="setAmount(100)">$100</button>
-  <button onclick="setAmount(200)">$200</button>
-  <p class="small">Selected: $<span id="amount">100</span></p>
+  <input type="number" id="betAmount" value="100" min="1">
 </div>
 
 <!-- GAMES -->
-<div id="gamesPage" class="page active">
-  <div class="box">
-    <h3>Games</h3>
-    <div id="games">Loading...</div>
-  </div>
+<div id="gamesTab" class="box">
+  <h3>Games</h3>
+  <div id="games">Loading matches...</div>
 </div>
 
 <!-- BETS -->
-<div id="betsPage" class="page">
-  <div class="box">
-    <h3>Your Bets</h3>
-    <div id="bets"></div>
-  </div>
+<div id="betsTab" class="box" style="display:none">
+  <h3>My Bets</h3>
+  <div id="bets"></div>
 </div>
 
 <!-- HISTORY -->
-<div id="historyPage" class="page">
-  <div class="box">
-    <h3>History</h3>
-    <div id="history"></div>
-  </div>
+<div id="historyTab" class="box" style="display:none">
+  <h3>History</h3>
+  <div id="history"></div>
 </div>
 
 <script>
 
-const API = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
+// =====================
+// API
+// =====================
+const API_URL = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
 
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
-let betAmount = 100;
 
+// =====================
+// SAVE
+// =====================
 function save() {
   localStorage.setItem("balance", JSON.stringify(balance));
   localStorage.setItem("bets", JSON.stringify(bets));
 }
 
+// =====================
+// UI
+// =====================
 function updateUI() {
   document.getElementById("balance").innerText = "Balance: $" + balance;
 }
 
-function setAmount(a) {
-  betAmount = a;
-  document.getElementById("amount").innerText = a;
+// =====================
+// TABS
+// =====================
+function showTab(tab) {
+  document.getElementById("gamesTab").style.display = tab === "games" ? "block" : "none";
+  document.getElementById("betsTab").style.display = tab === "bets" ? "block" : "none";
+  document.getElementById("historyTab").style.display = tab === "history" ? "block" : "none";
 }
 
-function showPage(page) {
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  document.getElementById(page + "Page").classList.add("active");
-}
-
+// =====================
+// LOAD MATCHES (WORKER)
+// =====================
 async function loadMatches() {
   try {
-    const res = await fetch(API);
+    const res = await fetch(API_URL);
     const data = await res.json();
 
-    matches = (data.matches || []).slice(0, 10);
+    matches = data.matches || [];
     renderMatches();
 
-  } catch (e) {
+  } catch (err) {
     document.getElementById("games").innerHTML = "Failed to load matches";
   }
 }
 
+// =====================
+// RENDER MATCHES
+// =====================
 function renderMatches() {
   let html = "";
 
   matches.forEach(m => {
 
-    const open = m.status === "TIMED" || m.status === "SCHEDULED";
-
     const home = m.score?.fullTime?.home ?? "-";
     const away = m.score?.fullTime?.away ?? "-";
 
-    const betOn = bets.find(b => b.gameId === m.id && b.status === "ACTIVE");
+    const open = m.status === "TIMED" || m.status === "SCHEDULED";
 
     html += `
-      <div class="box ${betOn ? 'selected' : ''}">
+      <div class="box">
         <p><b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b></p>
-        <p>Status: ${m.status}</p>
+
+        <p class="small">${m.status}</p>
         <p class="small">Score: ${home} - ${away}</p>
 
-        <button ${open ? "" : "disabled"} onclick="bet('${m.homeTeam.name}', ${m.id})">
-          Bet ${m.homeTeam.name} ($${betAmount})
+        <button ${open ? "" : "disabled"}
+          onclick="bet('${m.homeTeam.name}', ${m.id}, this)">
+          Bet ${m.homeTeam.name}
         </button>
 
-        <button ${open ? "" : "disabled"} onclick="bet('${m.awayTeam.name}', ${m.id})">
-          Bet ${m.awayTeam.name} ($${betAmount})
+        <button ${open ? "" : "disabled"}
+          onclick="bet('${m.awayTeam.name}', ${m.id}, this)">
+          Bet ${m.awayTeam.name}
         </button>
       </div>
     `;
@@ -198,24 +194,32 @@ function renderMatches() {
   document.getElementById("games").innerHTML = html;
 }
 
-function bet(team, id) {
+// =====================
+// BET FUNCTION (ANY AMOUNT)
+// =====================
+function bet(team, id, btn) {
 
-  if (bets.some(b => b.gameId === id && b.status === "ACTIVE")) {
-    alert("You already bet on this match!");
+  let amount = parseInt(document.getElementById("betAmount").value);
+
+  if (!amount || amount <= 0) {
+    alert("Enter valid bet amount");
     return;
   }
 
-  if (balance < betAmount) {
+  if (amount > balance) {
     alert("Not enough balance!");
     return;
   }
 
-  balance -= betAmount;
+  // highlight button
+  btn.classList.add("selected");
+
+  balance -= amount;
 
   bets.push({
     team,
     gameId: id,
-    amount: betAmount,
+    amount,
     status: "ACTIVE"
   });
 
@@ -224,24 +228,39 @@ function bet(team, id) {
   renderBets();
 }
 
+// =====================
+// BETS
+// =====================
 function renderBets() {
+
   const active = bets.filter(b => b.status === "ACTIVE");
 
   document.getElementById("bets").innerHTML =
     active.length
-      ? active.map(b => `${b.team} - $${b.amount}`).join("<br>")
+      ? active.map(b =>
+          `${b.team} - $${b.amount}`
+        ).join("<br>")
       : "No active bets";
 }
 
+// =====================
+// HISTORY
+// =====================
 function renderHistory() {
+
   const done = bets.filter(b => b.status !== "ACTIVE");
 
   document.getElementById("history").innerHTML =
     done.length
-      ? done.map(b => `${b.team} - ${b.status} ($${b.amount})`).join("<br>")
+      ? done.map(b =>
+          `${b.team} - ${b.status} - $${b.amount}`
+        ).join("<br>")
       : "No history yet";
 }
 
+// =====================
+// CHECK RESULTS
+// =====================
 function checkResults() {
 
   bets.forEach(b => {
@@ -249,12 +268,12 @@ function checkResults() {
     const m = matches.find(x => x.id === b.gameId);
     if (!m) return;
 
-    if ((m.status === "FINISHED" || m.status === "PAUSED") && b.status === "ACTIVE") {
+    if (m.status === "FINISHED" && b.status === "ACTIVE") {
 
-      const home = m.score?.fullTime?.home ?? 0;
-      const away = m.score?.fullTime?.away ?? 0;
+      const home = m.score.fullTime.home;
+      const away = m.score.fullTime.away;
 
-      let winner =
+      const winner =
         home > away ? m.homeTeam.name :
         away > home ? m.awayTeam.name :
         "DRAW";
@@ -274,11 +293,17 @@ function checkResults() {
   renderHistory();
 }
 
+// =====================
+// LOOP
+// =====================
 setInterval(() => {
   loadMatches();
   checkResults();
-}, 60000);
+}, 20000);
 
+// =====================
+// START
+// =====================
 loadMatches();
 updateUI();
 renderBets();
