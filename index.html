@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Bet260 ⚽ PRO MAX</title>
+<title>Bet260 ⚽ PRO MAX GAME</title>
 
 <style>
 body {
@@ -12,11 +12,13 @@ body {
   text-align: center;
 }
 
-/* TOP BAR */
+h1 { color: #00ff88; }
+
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   padding: 10px;
   background: #111823;
   position: sticky;
@@ -26,13 +28,11 @@ body {
 .topbar button {
   background: #00ff88;
   border: none;
-  padding: 8px 12px;
+  padding: 8px 10px;
   border-radius: 8px;
   font-weight: bold;
   cursor: pointer;
 }
-
-h1 { color: #00ff88; }
 
 .box {
   background: #151c24;
@@ -46,42 +46,41 @@ h1 { color: #00ff88; }
 button {
   background: #00ff88;
   border: none;
-  padding: 8px 10px;
-  margin: 5px;
+  padding: 6px 10px;
+  margin: 4px;
   border-radius: 8px;
   cursor: pointer;
   font-weight: bold;
 }
 
-button:disabled { background: #444; }
+button:disabled { background:#444; }
 
 .small {
   font-size: 12px;
-  color: #aaa;
+  color:#aaa;
 }
 
-/* MODAL */
-#modal {
-  display: none;
+.selected {
+  border: 2px solid yellow;
+  box-shadow: 0 0 10px yellow;
+}
+
+.popup {
   position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(0,0,0,0.7);
-}
-
-.modalBox {
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
   background: #151c24;
-  width: 300px;
-  margin: 20% auto;
   padding: 20px;
   border-radius: 12px;
+  display:none;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Bet260 ⚽ PRO MAX</h1>
+<h1>Bet260 ⚽ GAME</h1>
 <h2 id="balance">Balance: $1000</h2>
 
 <div class="topbar">
@@ -89,11 +88,13 @@ button:disabled { background: #444; }
   <button onclick="show('bets')">Bets</button>
   <button onclick="show('history')">History</button>
   <button onclick="show('leaderboard')">Leaderboard</button>
+  <button onclick="dailyReward()">Daily Reward</button>
+  <button onclick="spin()">Spin</button>
 </div>
 
 <div class="box">
-  <h3>Bet Amount</h3>
-  <input id="betAmount" type="number" value="100">
+  Bet Amount:
+  <input id="amt" type="number" value="100">
 </div>
 
 <div id="games"></div>
@@ -101,249 +102,185 @@ button:disabled { background: #444; }
 <div id="history" style="display:none" class="box"></div>
 <div id="leaderboard" style="display:none" class="box"></div>
 
-<!-- BET MODAL -->
-<div id="modal">
-  <div class="modalBox">
-    <h3>Confirm Bet</h3>
-    <p id="modalText"></p>
-    <button onclick="confirmBet()">Confirm</button>
-    <button onclick="closeModal()">Cancel</button>
-  </div>
-</div>
+<div class="popup" id="popup"></div>
 
 <script>
-
-const API = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
 
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
-let pendingBet = null;
+let streak = 0;
 
-// leaderboard (local fake users)
 let leaderboard = JSON.parse(localStorage.getItem("leaderboard")) ?? [
-  {name:"You", score: balance},
-  {name:"AI_Bot1", score: 1200},
-  {name:"AI_Bot2", score: 900}
+  {name:"You", score:balance},
+  {name:"AI_1", score:1200},
+  {name:"AI_2", score:900}
 ];
 
-// sounds
-function sound(type){
-  const ctx = new AudioContext();
-  const o = ctx.createOscillator();
-  o.connect(ctx.destination);
-
-  if(type === "win") o.frequency.value = 700;
-  if(type === "lose") o.frequency.value = 200;
-  if(type === "cash") o.frequency.value = 500;
-
-  o.start();
-  setTimeout(()=>o.stop(),150);
-}
+const API = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
 
 function save(){
-  localStorage.setItem("balance", JSON.stringify(balance));
-  localStorage.setItem("bets", JSON.stringify(bets));
-  localStorage.setItem("leaderboard", JSON.stringify(leaderboard));
+  localStorage.setItem("balance",JSON.stringify(balance));
+  localStorage.setItem("bets",JSON.stringify(bets));
+  localStorage.setItem("leaderboard",JSON.stringify(leaderboard));
 }
 
 function updateUI(){
   document.getElementById("balance").innerText =
-    "Balance: $" + balance;
+    "Balance: $" + balance + " | Streak: " + streak;
 }
 
 function show(tab){
+  games.style.display = tab==="games"?"block":"none";
+  bets.style.display = tab==="bets"?"block":"none";
+  history.style.display = tab==="history"?"block":"none";
+  leaderboard.style.display = tab==="leaderboard"?"block":"none";
 
-  document.getElementById("games").style.display = tab==="games"?"block":"none";
-  document.getElementById("bets").style.display = tab==="bets"?"block":"none";
-  document.getElementById("history").style.display = tab==="history"?"block":"none";
-  document.getElementById("leaderboard").style.display = tab==="leaderboard"?"block":"none";
-
-  if(tab==="leaderboard") renderLeaderboard();
+  if(tab==="leaderboard") renderLB();
 }
 
-// LIVE ODDS
-function odds(id){
-  return (1.2 + (id % 7)*0.3 + Math.random()*0.2).toFixed(2);
-}
+// AI %
+function aiChance(){ return Math.floor(40+Math.random()*60); }
+
+// ODDS
+function odds(id){ return (1.2+(id%6)*0.4).toFixed(2); }
 
 async function load(){
-  const res = await fetch(API);
-  const data = await res.json();
-  matches = data.matches || [];
-  renderMatches();
+  let r = await fetch(API);
+  let d = await r.json();
+  matches = d.matches || [];
+  render();
 }
 
-function renderMatches(){
-
-  let html = "";
+function render(){
+  let h="";
 
   matches.forEach(m=>{
+    let ai = aiChance();
 
-    const home = m.score?.fullTime?.home ?? "-";
-    const away = m.score?.fullTime?.away ?? "-";
-    const o = odds(m.id);
+    h+=`
+    <div class="box">
+      <b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b>
+      <div class="small">AI Win Chance: ${ai}%</div>
+      <div class="small">Odds: ${odds(m.id)}x</div>
 
-    html += `
-      <div class="box">
-        <b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b>
-
-        <div class="small">Odds: ${o}x</div>
-        <div class="small">${m.status}</div>
-
-        <div class="small">${home} - ${away}</div>
-
-        <button onclick="openBet('${m.homeTeam.name}',${m.id},${o})">
-          Bet Home
-        </button>
-
-        <button onclick="openBet('${m.awayTeam.name}',${m.id},${o})">
-          Bet Away
-        </button>
-      </div>
-    `;
+      <button onclick="bet('${m.homeTeam.name}',${m.id})">Home</button>
+      <button onclick="bet('${m.awayTeam.name}',${m.id})">Away</button>
+    </div>`;
   });
 
-  document.getElementById("games").innerHTML = html;
+  games.innerHTML=h;
 }
 
-// BET SLIP
-function openBet(team,id,odds){
+function bet(team,id){
 
-  let amt = parseInt(document.getElementById("betAmount").value);
+  let amt = +document.getElementById("amt").value;
+  if(amt>balance||amt<=0) return alert("Invalid");
 
-  if(!amt || amt>balance) return alert("Invalid bet");
+  balance-=amt;
 
-  pendingBet = {team,id,odds,amt};
+  bets.push({team,id,amt,status:"ACTIVE"});
 
-  document.getElementById("modalText").innerText =
-    `${team} | $${amt} | ${odds}x`;
-
-  document.getElementById("modal").style.display="block";
-}
-
-function closeModal(){
-  document.getElementById("modal").style.display="none";
-  pendingBet=null;
-}
-
-function confirmBet(){
-
-  balance -= pendingBet.amt;
-
-  bets.push({
-    ...pendingBet,
-    status:"ACTIVE"
-  });
-
-  closeModal();
   save();
   updateUI();
   renderBets();
 }
 
-// BETS
 function renderBets(){
+  let a=bets.filter(b=>b.status==="ACTIVE");
 
-  let active = bets.filter(b=>b.status==="ACTIVE");
-
-  document.getElementById("bets").innerHTML =
-    active.length ?
-    active.map((b,i)=>
-      `${b.team} $${b.amt} (${b.odds}x)
-      <button onclick="cashOut(${bets.indexOf(b)})">Cash Out</button><br>`
-    ).join("")
-    : "No active bets";
+  bets.innerHTML=a.length?
+  a.map(b=>`${b.team} $${b.amt}`).join("<br>")
+  :"No bets";
 }
 
-// CASH OUT
-function cashOut(i){
+function renderHistory(){
+  let d=bets.filter(b=>b.status!=="ACTIVE");
 
-  let b = bets[i];
-  if(!b || b.status!=="ACTIVE") return;
-
-  let win = Math.floor(b.amt*b.odds*0.8);
-
-  balance += win;
-  b.status="CASHED";
-
-  sound("cash");
-
-  save();
-  updateUI();
-  renderBets();
-  renderHistory();
+  history.innerHTML=d.map(b=>`${b.team} - ${b.status}`).join("<br>");
 }
 
-// HISTORY + WIN CHECK
+// SPIN
+function spin(){
+  let r=[0,50,100,200,500][Math.floor(Math.random()*5)];
+  balance+=r;
+  popup("Spin +"+r);
+  save();updateUI();
+}
+
+// DAILY
+function dailyReward(){
+  let last=localStorage.getItem("daily");
+  let today=new Date().toDateString();
+
+  if(last!==today){
+    balance+=200;
+    localStorage.setItem("daily",today);
+    popup("Daily +200");
+  }
+  save();updateUI();
+}
+
+function popup(t){
+  let p=document.getElementById("popup");
+  p.style.display="block";
+  p.innerText=t;
+  setTimeout(()=>p.style.display="none",1500);
+}
+
+// CHECK RESULTS
 function check(){
 
   bets.forEach(b=>{
 
-    let m = matches.find(x=>x.id===b.id);
-    if(!m || b.status!=="ACTIVE") return;
+    let m=matches.find(x=>x.id===b.id);
+    if(!m||b.status!=="ACTIVE")return;
 
     if(m.status==="FINISHED"){
 
-      let w =
-        m.score.fullTime.home > m.score.fullTime.away
+      let win =
+        m.score.fullTime.home>m.score.fullTime.away
         ? m.homeTeam.name
         : m.awayTeam.name;
 
-      if(b.team===w){
+      if(b.team===win){
         b.status="WON";
-        balance += Math.floor(b.amt*b.odds*2);
-        sound("win");
+        streak++;
+
+        let payout=b.amt*2;
+        if(streak>=3)payout*=1.5;
+
+        balance+=payout;
       } else {
         b.status="LOST";
-        sound("lose");
+        streak=0;
       }
     }
   });
-
-  updateLeaderboard();
 
   save();
   updateUI();
   renderBets();
   renderHistory();
-}
-
-function renderHistory(){
-
-  let done = bets.filter(b=>b.status!=="ACTIVE");
-
-  document.getElementById("history").innerHTML =
-    done.map(b=>`${b.team} - ${b.status} - $${b.amt}`).join("<br>");
+  updateLB();
 }
 
 // LEADERBOARD
-function updateLeaderboard(){
-
-  leaderboard[0].score = balance;
-
+function updateLB(){
+  leaderboard[0].score=balance;
   leaderboard.sort((a,b)=>b.score-a.score);
-
   save();
 }
 
-function renderLeaderboard(){
-
-  document.getElementById("leaderboard").innerHTML =
+function renderLB(){
+  leaderboard.innerHTML=
     leaderboard.map(l=>`${l.name} - $${l.score}`).join("<br>");
 }
 
-// LOOP
-setInterval(()=>{
-  load();
-  check();
-},10000);
+setInterval(()=>{load();check();},10000);
 
-// START
 load();
 updateUI();
-renderBets();
-renderHistory();
 
 </script>
 
