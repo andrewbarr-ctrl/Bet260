@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Bet260 ⚽ PRO</title>
+<title>Bet260 ⚽ PRO MAX</title>
 
 <style>
 body {
@@ -12,10 +12,11 @@ body {
   text-align: center;
 }
 
+/* TOP BAR */
 .topbar {
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   padding: 10px;
   background: #111823;
   position: sticky;
@@ -52,126 +53,152 @@ button {
   font-weight: bold;
 }
 
-button:disabled {
-  background: #444;
-}
-
-.selected {
-  border: 2px solid yellow;
-  box-shadow: 0 0 10px yellow;
-}
+button:disabled { background: #444; }
 
 .small {
-  color: #aaa;
   font-size: 12px;
+  color: #aaa;
+}
+
+/* MODAL */
+#modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.7);
+}
+
+.modalBox {
+  background: #151c24;
+  width: 300px;
+  margin: 20% auto;
+  padding: 20px;
+  border-radius: 12px;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Bet260 ⚽ PRO</h1>
+<h1>Bet260 ⚽ PRO MAX</h1>
 <h2 id="balance">Balance: $1000</h2>
 
 <div class="topbar">
-  <button onclick="showTab('games')">Games</button>
-  <button onclick="showTab('bets')">Bets</button>
-  <button onclick="showTab('history')">History</button>
+  <button onclick="show('games')">Games</button>
+  <button onclick="show('bets')">Bets</button>
+  <button onclick="show('history')">History</button>
+  <button onclick="show('leaderboard')">Leaderboard</button>
 </div>
 
 <div class="box">
   <h3>Bet Amount</h3>
-  <input type="number" id="betAmount" value="100">
+  <input id="betAmount" type="number" value="100">
 </div>
 
-<div id="gamesTab" class="box">
-  <h3>Games</h3>
-  <div id="games">Loading...</div>
-</div>
+<div id="games"></div>
+<div id="bets" style="display:none" class="box"></div>
+<div id="history" style="display:none" class="box"></div>
+<div id="leaderboard" style="display:none" class="box"></div>
 
-<div id="betsTab" class="box" style="display:none">
-  <h3>My Bets</h3>
-  <div id="bets"></div>
-</div>
-
-<div id="historyTab" class="box" style="display:none">
-  <h3>History</h3>
-  <div id="history"></div>
+<!-- BET MODAL -->
+<div id="modal">
+  <div class="modalBox">
+    <h3>Confirm Bet</h3>
+    <p id="modalText"></p>
+    <button onclick="confirmBet()">Confirm</button>
+    <button onclick="closeModal()">Cancel</button>
+  </div>
 </div>
 
 <script>
 
-const API_URL = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
+const API = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
 
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
+let pendingBet = null;
 
-// win streak bonus
-let streak = 0;
+// leaderboard (local fake users)
+let leaderboard = JSON.parse(localStorage.getItem("leaderboard")) ?? [
+  {name:"You", score: balance},
+  {name:"AI_Bot1", score: 1200},
+  {name:"AI_Bot2", score: 900}
+];
 
-function save() {
+// sounds
+function sound(type){
+  const ctx = new AudioContext();
+  const o = ctx.createOscillator();
+  o.connect(ctx.destination);
+
+  if(type === "win") o.frequency.value = 700;
+  if(type === "lose") o.frequency.value = 200;
+  if(type === "cash") o.frequency.value = 500;
+
+  o.start();
+  setTimeout(()=>o.stop(),150);
+}
+
+function save(){
   localStorage.setItem("balance", JSON.stringify(balance));
   localStorage.setItem("bets", JSON.stringify(bets));
+  localStorage.setItem("leaderboard", JSON.stringify(leaderboard));
 }
 
-function updateUI() {
+function updateUI(){
   document.getElementById("balance").innerText =
-    "Balance: $" + balance + " | Streak: " + streak;
+    "Balance: $" + balance;
 }
 
-function showTab(tab) {
-  document.getElementById("gamesTab").style.display = tab === "games" ? "block" : "none";
-  document.getElementById("betsTab").style.display = tab === "bets" ? "block" : "none";
-  document.getElementById("historyTab").style.display = tab === "history" ? "block" : "none";
+function show(tab){
+
+  document.getElementById("games").style.display = tab==="games"?"block":"none";
+  document.getElementById("bets").style.display = tab==="bets"?"block":"none";
+  document.getElementById("history").style.display = tab==="history"?"block":"none";
+  document.getElementById("leaderboard").style.display = tab==="leaderboard"?"block":"none";
+
+  if(tab==="leaderboard") renderLeaderboard();
 }
 
-// stable odds per match
-function getOdds(id) {
-  return (1.2 + (id % 5) * 0.4).toFixed(2);
+// LIVE ODDS
+function odds(id){
+  return (1.2 + (id % 7)*0.3 + Math.random()*0.2).toFixed(2);
 }
 
-async function loadMatches() {
-  try {
-    const res = await fetch(API_URL);
-    const data = await res.json();
-
-    matches = data.matches || [];
-    renderMatches();
-
-  } catch {
-    document.getElementById("games").innerHTML = "Failed to load matches";
-  }
+async function load(){
+  const res = await fetch(API);
+  const data = await res.json();
+  matches = data.matches || [];
+  renderMatches();
 }
 
-function renderMatches() {
+function renderMatches(){
 
   let html = "";
 
-  matches.forEach(m => {
+  matches.forEach(m=>{
 
     const home = m.score?.fullTime?.home ?? "-";
     const away = m.score?.fullTime?.away ?? "-";
-    const odds = getOdds(m.id);
-
-    const open = m.status === "TIMED";
+    const o = odds(m.id);
 
     html += `
       <div class="box">
-        <p><b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b></p>
+        <b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b>
 
-        <p class="small">Odds: ${odds}x</p>
-        <p class="small">Status: ${m.status}</p>
-        <p class="small">Score: ${home} - ${away}</p>
+        <div class="small">Odds: ${o}x</div>
+        <div class="small">${m.status}</div>
 
-        <button ${open ? "" : "disabled"}
-          onclick="bet('${m.homeTeam.name}', ${m.id}, ${odds}, this)">
-          Bet ${m.homeTeam.name}
+        <div class="small">${home} - ${away}</div>
+
+        <button onclick="openBet('${m.homeTeam.name}',${m.id},${o})">
+          Bet Home
         </button>
 
-        <button ${open ? "" : "disabled"}
-          onclick="bet('${m.awayTeam.name}', ${m.id}, ${odds}, this)">
-          Bet ${m.awayTeam.name}
+        <button onclick="openBet('${m.awayTeam.name}',${m.id},${o})">
+          Bet Away
         </button>
       </div>
     `;
@@ -180,39 +207,67 @@ function renderMatches() {
   document.getElementById("games").innerHTML = html;
 }
 
-function bet(team, id, odds, btn) {
+// BET SLIP
+function openBet(team,id,odds){
 
-  let amount = parseInt(document.getElementById("betAmount").value);
+  let amt = parseInt(document.getElementById("betAmount").value);
 
-  if (!amount || amount > balance) return alert("Invalid bet");
+  if(!amt || amt>balance) return alert("Invalid bet");
 
-  balance -= amount;
+  pendingBet = {team,id,odds,amt};
 
-  btn.classList.add("selected");
+  document.getElementById("modalText").innerText =
+    `${team} | $${amt} | ${odds}x`;
+
+  document.getElementById("modal").style.display="block";
+}
+
+function closeModal(){
+  document.getElementById("modal").style.display="none";
+  pendingBet=null;
+}
+
+function confirmBet(){
+
+  balance -= pendingBet.amt;
 
   bets.push({
-    team,
-    gameId: id,
-    amount,
-    odds,
-    status: "ACTIVE"
+    ...pendingBet,
+    status:"ACTIVE"
   });
 
+  closeModal();
   save();
   updateUI();
   renderBets();
 }
 
-function cashOut(index) {
+// BETS
+function renderBets(){
 
-  let b = bets[index];
-  if (b.status !== "ACTIVE") return;
+  let active = bets.filter(b=>b.status==="ACTIVE");
 
-  let payout = Math.floor(b.amount * b.odds);
+  document.getElementById("bets").innerHTML =
+    active.length ?
+    active.map((b,i)=>
+      `${b.team} $${b.amt} (${b.odds}x)
+      <button onclick="cashOut(${bets.indexOf(b)})">Cash Out</button><br>`
+    ).join("")
+    : "No active bets";
+}
 
-  balance += payout;
+// CASH OUT
+function cashOut(i){
 
-  b.status = "CASHED OUT";
+  let b = bets[i];
+  if(!b || b.status!=="ACTIVE") return;
+
+  let win = Math.floor(b.amt*b.odds*0.8);
+
+  balance += win;
+  b.status="CASHED";
+
+  sound("cash");
 
   save();
   updateUI();
@@ -220,82 +275,72 @@ function cashOut(index) {
   renderHistory();
 }
 
-function renderBets() {
+// HISTORY + WIN CHECK
+function check(){
 
-  let active = bets.filter(b => b.status === "ACTIVE");
+  bets.forEach(b=>{
 
-  document.getElementById("bets").innerHTML =
-    active.length
-      ? active.map((b, i) =>
-          `
-          ${b.team} - $${b.amount} (${b.odds}x)
-          <button onclick="cashOut(${bets.indexOf(b)})">Cash Out</button>
-          <br>
-          `
-        ).join("")
-      : "No active bets";
-}
+    let m = matches.find(x=>x.id===b.id);
+    if(!m || b.status!=="ACTIVE") return;
 
-function renderHistory() {
+    if(m.status==="FINISHED"){
 
-  let done = bets.filter(b => b.status !== "ACTIVE");
+      let w =
+        m.score.fullTime.home > m.score.fullTime.away
+        ? m.homeTeam.name
+        : m.awayTeam.name;
 
-  document.getElementById("history").innerHTML =
-    done.length
-      ? done.map(b =>
-          `${b.team} - ${b.status} - $${b.amount}`
-        ).join("<br>")
-      : "No history";
-}
-
-function checkResults() {
-
-  bets.forEach(b => {
-
-    const m = matches.find(x => x.id === b.gameId);
-    if (!m || b.status !== "ACTIVE") return;
-
-    if (m.status === "FINISHED") {
-
-      const home = m.score.fullTime.home;
-      const away = m.score.fullTime.away;
-
-      const winner =
-        home > away ? m.homeTeam.name :
-        away > home ? m.awayTeam.name :
-        "DRAW";
-
-      if (b.team === winner) {
-
-        streak++;
-
-        let payout = Math.floor(b.amount * b.odds);
-
-        // streak bonus
-        if (streak >= 3) payout *= 1.5;
-
-        balance += payout;
-        b.status = "WON";
-
+      if(b.team===w){
+        b.status="WON";
+        balance += Math.floor(b.amt*b.odds*2);
+        sound("win");
       } else {
-        streak = 0;
-        b.status = "LOST";
+        b.status="LOST";
+        sound("lose");
       }
     }
   });
 
+  updateLeaderboard();
+
   save();
   updateUI();
   renderBets();
   renderHistory();
 }
 
-setInterval(() => {
-  loadMatches();
-  checkResults();
-}, 20000);
+function renderHistory(){
 
-loadMatches();
+  let done = bets.filter(b=>b.status!=="ACTIVE");
+
+  document.getElementById("history").innerHTML =
+    done.map(b=>`${b.team} - ${b.status} - $${b.amt}`).join("<br>");
+}
+
+// LEADERBOARD
+function updateLeaderboard(){
+
+  leaderboard[0].score = balance;
+
+  leaderboard.sort((a,b)=>b.score-a.score);
+
+  save();
+}
+
+function renderLeaderboard(){
+
+  document.getElementById("leaderboard").innerHTML =
+    leaderboard.map(l=>`${l.name} - $${l.score}`).join("<br>");
+}
+
+// LOOP
+setInterval(()=>{
+  load();
+  check();
+},10000);
+
+// START
+load();
 updateUI();
 renderBets();
 renderHistory();
