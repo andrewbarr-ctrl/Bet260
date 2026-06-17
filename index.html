@@ -68,14 +68,14 @@ button:disabled {
 <script>
 
 // =====================
-// STATE (SAVED DATA)
+// STATE
 // =====================
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
 
 // =====================
-// SAVE FUNCTION
+// SAVE
 // =====================
 function save() {
   localStorage.setItem("balance", JSON.stringify(balance));
@@ -83,29 +83,27 @@ function save() {
 }
 
 // =====================
-// UI UPDATE
+// UI
 // =====================
 function updateUI() {
   document.getElementById("balance").innerText = "Balance: $" + balance;
 }
 
 // =====================
-// LOAD MATCHES (WORKER FIX)
+// LOAD MATCHES (FIXED URL)
 // =====================
 async function loadMatches() {
   try {
     const res = await fetch("https://curly-union-9418.andrewbarr.workers.dev/");
     const data = await res.json();
 
-    matches = data.matches || [];
-    matches = matches.slice(0, 10);
+    matches = (data.matches || []).slice(0, 10);
 
     renderMatches();
 
   } catch (err) {
     console.log(err);
-    document.getElementById("games").innerHTML =
-      "Failed to load matches";
+    document.getElementById("games").innerHTML = "Failed to load matches";
   }
 }
 
@@ -117,12 +115,10 @@ function renderMatches() {
 
   matches.forEach(m => {
 
-    const open =
-      m.status === "TIMED" ||
-      m.status === "SCHEDULED";
+    const open = m.status === "TIMED" || m.status === "SCHEDULED";
 
-    const home = m.score?.fullTime?.home ?? "-";
-    const away = m.score?.fullTime?.away ?? "-";
+    const homeScore = m.score?.fullTime?.home ?? "-";
+    const awayScore = m.score?.fullTime?.away ?? "-";
 
     html += `
       <div class="box">
@@ -130,16 +126,16 @@ function renderMatches() {
 
         <p>Status: ${m.status}</p>
 
-        <p class="small">Score: ${home} - ${away}</p>
+        <p class="small">Score: ${homeScore} - ${awayScore}</p>
 
         <button ${open ? "" : "disabled"}
           onclick="bet('${m.homeTeam.name}', ${m.id})">
-          Bet ${m.homeTeam.name}
+          Pick ${m.homeTeam.name}
         </button>
 
         <button ${open ? "" : "disabled"}
           onclick="bet('${m.awayTeam.name}', ${m.id})">
-          Bet ${m.awayTeam.name}
+          Pick ${m.awayTeam.name}
         </button>
       </div>
     `;
@@ -149,14 +145,11 @@ function renderMatches() {
 }
 
 // =====================
-// PLACE BET
+// BET SYSTEM
 // =====================
 function bet(team, id) {
 
-  if (balance < 100) {
-    alert("Not enough balance!");
-    return;
-  }
+  if (balance < 100) return alert("Not enough balance");
 
   balance -= 100;
 
@@ -172,7 +165,7 @@ function bet(team, id) {
 }
 
 // =====================
-// ACTIVE BETS
+// BETS UI
 // =====================
 function renderBets() {
   const active = bets.filter(b => b.status === "ACTIVE");
@@ -184,7 +177,7 @@ function renderBets() {
 }
 
 // =====================
-// HISTORY
+// HISTORY UI
 // =====================
 function renderHistory() {
   const done = bets.filter(b => b.status !== "ACTIVE");
@@ -196,7 +189,7 @@ function renderHistory() {
 }
 
 // =====================
-// CHECK RESULTS
+// RESULT CHECKER (FIXED SAFE VERSION)
 // =====================
 function checkResults() {
 
@@ -205,25 +198,23 @@ function checkResults() {
     const m = matches.find(x => x.id === b.gameId);
     if (!m) return;
 
-    if (
-      (m.status === "FINISHED" ||
-       m.status === "PAUSED") &&
-      b.status === "ACTIVE"
-    ) {
+    if (m.status === "FINISHED") {
 
-      const home = m.score.fullTime.home;
-      const away = m.score.fullTime.away;
+      const home = m.score?.fullTime?.home ?? 0;
+      const away = m.score?.fullTime?.away ?? 0;
 
       let winner =
         home > away ? m.homeTeam.name :
         away > home ? m.awayTeam.name :
         "DRAW";
 
-      if (b.team === winner) {
-        b.status = "WON";
-        balance += 200;
-      } else {
-        b.status = "LOST";
+      if (b.status === "ACTIVE") {
+        if (b.team === winner) {
+          b.status = "WON";
+          balance += 200;
+        } else {
+          b.status = "LOST";
+        }
       }
     }
   });
@@ -235,16 +226,14 @@ function checkResults() {
 }
 
 // =====================
-// AUTO UPDATE LOOP
+// LOOP
 // =====================
 setInterval(() => {
   loadMatches();
   checkResults();
 }, 20000);
 
-// =====================
 // START
-// =====================
 loadMatches();
 updateUI();
 renderBets();
