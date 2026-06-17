@@ -1,48 +1,48 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Bet260 ⚽</title>
+  <title>Bet260 ⚽</title>
 
-<style>
-body {
-  font-family: Arial;
-  background: #0b0f14;
-  color: #e6e6e6;
-  margin: 0;
-  text-align: center;
-}
+  <style>
+    body {
+      font-family: Arial;
+      background: #0b0f14;
+      color: #e6e6e6;
+      margin: 0;
+      text-align: center;
+    }
 
-h1 { color: #00ff88; }
+    h1 { color: #00ff88; }
 
-.box {
-  background: #151c24;
-  margin: 10px auto;
-  padding: 15px;
-  width: 92%;
-  max-width: 700px;
-  border-radius: 12px;
-}
+    .box {
+      background: #151c24;
+      margin: 10px auto;
+      padding: 15px;
+      width: 92%;
+      max-width: 700px;
+      border-radius: 12px;
+    }
 
-button {
-  background: #00ff88;
-  border: none;
-  padding: 8px 10px;
-  margin: 5px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-}
+    button {
+      background: #00ff88;
+      border: none;
+      padding: 8px 10px;
+      margin: 5px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
 
-button:disabled {
-  background: #444;
-  cursor: not-allowed;
-}
+    button:disabled {
+      background: #444;
+      cursor: not-allowed;
+    }
 
-.small {
-  color: #aaa;
-  font-size: 12px;
-}
-</style>
+    .small {
+      color: #aaa;
+      font-size: 12px;
+    }
+  </style>
 </head>
 
 <body>
@@ -68,11 +68,13 @@ button:disabled {
 <script>
 
 // =====================
-// STATE
+// DATA
 // =====================
 let balance = JSON.parse(localStorage.getItem("balance")) ?? 1000;
 let bets = JSON.parse(localStorage.getItem("bets")) ?? [];
 let matches = [];
+
+const WORKER_URL = "https://green-recipe-d6bd.andrewbarr.workers.dev/";
 
 // =====================
 // SAVE
@@ -90,19 +92,18 @@ function updateUI() {
 }
 
 // =====================
-// LOAD MATCHES (FIXED URL)
+// LOAD MATCHES
 // =====================
 async function loadMatches() {
   try {
-    const res = await fetch("https://curly-union-9418.andrewbarr.workers.dev/");
+    const res = await fetch(WORKER_URL);
     const data = await res.json();
 
-    matches = (data.matches || []).slice(0, 10);
-
+    matches = data.matches || [];
     renderMatches();
 
-  } catch (err) {
-    console.log(err);
+  } catch (e) {
+    console.log(e);
     document.getElementById("games").innerHTML = "Failed to load matches";
   }
 }
@@ -117,8 +118,8 @@ function renderMatches() {
 
     const open = m.status === "TIMED" || m.status === "SCHEDULED";
 
-    const homeScore = m.score?.fullTime?.home ?? "-";
-    const awayScore = m.score?.fullTime?.away ?? "-";
+    const home = m.score?.fullTime?.home ?? "-";
+    const away = m.score?.fullTime?.away ?? "-";
 
     html += `
       <div class="box">
@@ -126,16 +127,16 @@ function renderMatches() {
 
         <p>Status: ${m.status}</p>
 
-        <p class="small">Score: ${homeScore} - ${awayScore}</p>
+        <p class="small">Score: ${home} - ${away}</p>
 
         <button ${open ? "" : "disabled"}
           onclick="bet('${m.homeTeam.name}', ${m.id})">
-          Pick ${m.homeTeam.name}
+          Bet ${m.homeTeam.name}
         </button>
 
         <button ${open ? "" : "disabled"}
           onclick="bet('${m.awayTeam.name}', ${m.id})">
-          Pick ${m.awayTeam.name}
+          Bet ${m.awayTeam.name}
         </button>
       </div>
     `;
@@ -148,8 +149,7 @@ function renderMatches() {
 // BET SYSTEM
 // =====================
 function bet(team, id) {
-
-  if (balance < 100) return alert("Not enough balance");
+  if (balance < 100) return alert("Not enough balance!");
 
   balance -= 100;
 
@@ -165,7 +165,7 @@ function bet(team, id) {
 }
 
 // =====================
-// BETS UI
+// BETS
 // =====================
 function renderBets() {
   const active = bets.filter(b => b.status === "ACTIVE");
@@ -177,7 +177,7 @@ function renderBets() {
 }
 
 // =====================
-// HISTORY UI
+// HISTORY
 // =====================
 function renderHistory() {
   const done = bets.filter(b => b.status !== "ACTIVE");
@@ -189,32 +189,29 @@ function renderHistory() {
 }
 
 // =====================
-// RESULT CHECKER (FIXED SAFE VERSION)
+// CHECK RESULTS
 // =====================
 function checkResults() {
-
   bets.forEach(b => {
 
     const m = matches.find(x => x.id === b.gameId);
     if (!m) return;
 
-    if (m.status === "FINISHED") {
+    if (m.status === "FINISHED" && b.status === "ACTIVE") {
 
-      const home = m.score?.fullTime?.home ?? 0;
-      const away = m.score?.fullTime?.away ?? 0;
+      const home = m.score.fullTime.home;
+      const away = m.score.fullTime.away;
 
-      let winner =
+      const winner =
         home > away ? m.homeTeam.name :
         away > home ? m.awayTeam.name :
         "DRAW";
 
-      if (b.status === "ACTIVE") {
-        if (b.team === winner) {
-          b.status = "WON";
-          balance += 200;
-        } else {
-          b.status = "LOST";
-        }
+      if (b.team === winner) {
+        b.status = "WON";
+        balance += 200;
+      } else {
+        b.status = "LOST";
       }
     }
   });
