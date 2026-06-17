@@ -71,7 +71,7 @@
       padding: 6px;
       border-radius: 6px;
       border: none;
-      width: 80px;
+      width: 90px;
     }
   </style>
 </head>
@@ -92,7 +92,7 @@
 <div id="gamesTab">
   <div class="box">
     <h3>Games</h3>
-    <div id="games">Loading...</div>
+    <div id="games">Loading matches...</div>
   </div>
 </div>
 
@@ -149,7 +149,7 @@ async function loadMatches() {
   }
 }
 
-// RENDER MATCHES
+// RENDER MATCHES (BETTING LOCKED WHEN NOT TIMED)
 function renderMatches() {
   let html = "";
 
@@ -160,6 +160,9 @@ function renderMatches() {
 
     const alreadyBet = bets.find(b => b.gameId === m.id);
 
+    // ONLY TIMED = BET ALLOWED
+    const canBet = m.status === "TIMED";
+
     html += `
       <div class="box">
         <p><b>${m.homeTeam.name}</b> vs <b>${m.awayTeam.name}</b></p>
@@ -167,25 +170,31 @@ function renderMatches() {
         <p>Status: ${m.status}</p>
         <p class="small">Score: ${home} - ${away}</p>
 
-        <input type="number" id="amt-${m.id}" placeholder="Bet $" value="100" min="1" max="${balance}"/>
+        <input type="number" id="amt-${m.id}" 
+          value="100"
+          min="1"
+          max="${balance}"
+          ${canBet ? "" : "disabled"}
+        />
 
         <br/>
 
         <button
           class="${alreadyBet?.team === m.homeTeam.name ? 'selected' : ''}"
-          ${alreadyBet ? "disabled" : ""}
+          ${(!canBet || alreadyBet) ? "disabled" : ""}
           onclick="placeBet('${m.homeTeam.name}', ${m.id})">
           ${m.homeTeam.name}
         </button>
 
         <button
           class="${alreadyBet?.team === m.awayTeam.name ? 'selected' : ''}"
-          ${alreadyBet ? "disabled" : ""}
+          ${(!canBet || alreadyBet) ? "disabled" : ""}
           onclick="placeBet('${m.awayTeam.name}', ${m.id})">
           ${m.awayTeam.name}
         </button>
 
-        ${alreadyBet ? `<p class="small">Bet placed: ${alreadyBet.team}</p>` : ""}
+        ${!canBet ? `<p class="small">Betting closed</p>` : ""}
+        ${alreadyBet ? `<p class="small">You bet: ${alreadyBet.team} ($${alreadyBet.amount})</p>` : ""}
       </div>
     `;
   });
@@ -193,11 +202,18 @@ function renderMatches() {
   document.getElementById("games").innerHTML = html;
 }
 
-// PLACE BET (ONLY ONE PER MATCH)
+// PLACE BET (SAFE)
 function placeBet(team, id) {
 
+  const match = matches.find(m => m.id === id);
+
+  if (!match || match.status !== "TIMED") {
+    alert("Betting is closed!");
+    return;
+  }
+
   if (bets.find(b => b.gameId === id)) {
-    alert("You already bet on this match!");
+    alert("Already bet on this match!");
     return;
   }
 
@@ -205,7 +221,7 @@ function placeBet(team, id) {
   let amount = Number(input.value);
 
   if (!amount || amount <= 0) {
-    alert("Invalid bet amount");
+    alert("Invalid amount");
     return;
   }
 
@@ -229,7 +245,7 @@ function placeBet(team, id) {
   renderBets();
 }
 
-// BETS PAGE
+// BETS
 function renderBets() {
   const active = bets.filter(b => b.status === "ACTIVE");
 
@@ -239,7 +255,7 @@ function renderBets() {
       : "No active bets";
 }
 
-// HISTORY PAGE
+// HISTORY
 function renderHistory() {
   const done = bets.filter(b => b.status !== "ACTIVE");
 
